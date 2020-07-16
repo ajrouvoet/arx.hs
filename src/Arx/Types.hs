@@ -6,6 +6,7 @@ import Data.UnixTime
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Logger
 
 import System.Posix.Files as Posix
 import System.Posix.Types
@@ -23,7 +24,7 @@ import Arx.Monad
 
 -- makeLenses ''ArxSt
 
-type Arx = ReaderT Config IO
+type Arx = ReaderT Config (LoggingT IO)
 
 instance MonadArx Arx where
 

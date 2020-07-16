@@ -5,7 +5,9 @@ module Arx.Monad where
 import Data.Map.Strict as Map
 import Data.Maybe
 import Data.Default
-import Data.Text
+import Data.Text (pack)
+import Data.Time
+import Data.Time.Clock.POSIX
 -- import Data.Attoparsec.Char8 as Atto
 -- import Data.Word
 -- import Data.HashMap.Strict as HM
@@ -15,16 +17,18 @@ import Data.Text
 
 import Control.Lens
 import Control.Monad
+import Control.Monad.Logger
+import Control.Monad.Trans.Resource
+import Control.Monad.Reader
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
 
 -- import System.IO
 import System.Directory
--- import System.Posix.Files as Posix
--- import System.Posix.Types
--- import System.Posix.Time
+import System.Posix.Time
+import System.Posix.Files as Posix
 import System.FilePath
--- import System.FilePath.Find as Find
+import System.FilePath.Find as Find
 
 import Database.Persist.Sqlite
 
@@ -38,30 +42,108 @@ import Arx.Archive
 
 class (Monad m, MonadUnliftIO m, MonadIO m) ⇒ MonadArx m where
 
-  runArx          :: Config → m a → IO a
+  runArx          :: Config → m a → LoggingT IO a
 
   -- configuration
   config          :: m Config
-  -- snappedAt       :: m UnixTime
-  -- snappedAtModify :: UnixTime → m ()
 
-  -- snapshot       :: m Snapshot
-  -- snapshotModify :: (Snapshot → Snapshot) → m ()
+type DbAction m a = ReaderT SqlBackend (NoLoggingT (ResourceT m)) a
 
-init :: (MonadArx m) => m ()
-init = do
+defaultSnap :: Snap
+defaultSnap = Snap "<current>" (UTCTime (ModifiedJulianDay 0) 0)
+
+latestSnap :: (MonadArx m) => DbAction m (Maybe (Entity Snap))
+latestSnap = do
+  selectFirst
+    []
+    [ Desc SnapFinished ]
+
+mkSnap :: (MonadArx m) => m (Entity Snap)
+mkSnap = do
+  time ← liftIO $ getCurrentTime
+  withDb $ insertEntity $ Snap "<current>" time
+
+withDb :: (MonadArx m) => DbAction m a → m a
+withDb c = do
   path ← (\c → c^.dbPath) <$> config
   liftIO (createDirectoryIfMissing True $ takeDirectory path)
-  runSqlite (pack path) $ do
-    runMigration migrateAll
+  runSqlite (pack path) c
 
--- data Snapshot = Snapshot
---   { byDigest :: Map (Digest SHA1) Object
---   , byPath   :: HashMap FilePath Object
---   }
+init :: (MonadLogger m, MonadArx m) => m ()
+init = do
+  withDb $ runMigration migrateAll
+  buildCache
 
--- instance Show Snapshot where
---   show = show . byPath
+getObject :: (MonadIO m) ⇒ FilePath → m PlainObject
+getObject path = do
+  dig ← liftIO $ hashFile path
+  return $ Plain path dig
+
+utcToEpochTime = fromIntegral . floor . utcTimeToPOSIXSeconds
+
+allFiles :: (MonadArx m) ⇒ m [FilePath]
+allFiles = do
+  path  ← _root <$> config
+  files ← liftIO $ find always
+    (   fileType ==? RegularFile
+    &&? filePath /~? "**/.arx/*")
+    path
+  return ((\p → normalise (path </> p)) <$> files)
+
+modifiedFiles :: (MonadArx m) ⇒ UTCTime → m [FilePath]
+modifiedFiles since = do
+  let time = utcToEpochTime since
+  path  ← _root <$> config
+  files ← liftIO $ find always
+    (   fileType ==? RegularFile
+    &&? filePath /~? "**/.arx/*"
+    &&? Find.modificationTime >=? time)
+    path
+  return ((path </>) <$> files)
+
+buildFileCache :: (MonadArx m) => SnapId → FilePath -> m (Entity Object)
+buildFileCache snap path = do
+  (Plain _ d) ← getObject path
+  withDb $ insertEntity $ Object snap path (show d)
+
+copyFileCache :: (MonadLogger m, MonadArx m) => SnapId → SnapId → FilePath -> m (Entity Object)
+copyFileCache snapFrom snapTo path = do
+  do
+    mObj ← withDb $ getBy (UniquePath snapFrom path)
+    case mObj of
+      Nothing  → do
+        logWarnNS "arx:cache" (pack $ "Cache miss for " ++ path)
+        buildFileCache snapTo path
+      Just obj → withDb $ insertEntity $ Object snapTo path (objectDigest $ entityVal obj)
+
+buildFreshCache :: (MonadLogger m, MonadArx m) => SnapId → [FilePath] → m ()
+buildFreshCache snap files = forM_ files $ \ file → do
+  logInfoNS "arx:cache" (pack $ "Fresh cache for " ++ file)
+  buildFileCache snap file
+
+buildCache :: (MonadLogger m, MonadArx m) => m ()
+buildCache = do
+  mLatest ← withDb latestSnap
+  snap    ← mkSnap
+  files   ← allFiles
+
+  case mLatest of
+    Nothing → buildFreshCache (entityKey snap) files
+    Just latest → do
+      let since = snapFinished $ entityVal latest
+
+      forM_ files $ \ file → do
+        status ← liftIO $ getFileStatus file
+        let modded = Posix.modificationTime status > (utcToEpochTime since)
+
+        if modded
+          then (do
+            logInfoNS "arx:cache" (pack $ "Modified: " ++ file)
+            buildFileCache (entityKey snap) file
+          ) else (do
+            copyFileCache (entityKey latest) (entityKey snap) file
+          )
+
 
 -- missing :: Snapshot → Snapshot → Map (Digest SHA1) Object
 -- missing mst cli = Map.difference  (byDigest cli) (byDigest mst)
@@ -143,16 +225,6 @@ init = do
 
 -- init :: (MonadArx m) ⇒ m 
 
--- modifiedFiles :: (MonadArx m) ⇒ m [FilePath]
--- modifiedFiles = do
---   time ← toEpochTime <$> snappedAt
---   root ← archive <$> config
---   liftIO $ find always
---     (   fileType ==? RegularFile
---     &&? fileName /=? ".arx"
---     &&? Find.modificationTime >=? time)
---     root
-
 -- insertObject :: (MonadArx m) ⇒ Object → m ()
 -- insertObject o = do
 --   snapshotModify
@@ -190,6 +262,8 @@ init = do
 --   objs ← (HM.elems . byPath) <$> snapshot
 --   return $ dupeOf objs
 
-arx :: (MonadArx m) ⇒ Config → m a → IO a
+arx :: (MonadArx m) ⇒ Config → m a → LoggingT IO a
 arx c m = do
-  runArx c m
+  -- normalize the root
+  r ← liftIO $ makeAbsolute (c^.root)
+  runArx (Config r) m

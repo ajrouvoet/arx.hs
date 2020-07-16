@@ -47,6 +47,8 @@ dependencies:
 - time
 - text
 - unliftio-core
+- monad-logger
+- resourcet
 
 library:
   source-dirs: src

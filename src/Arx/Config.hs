@@ -13,5 +13,5 @@ getArchivePath :: Getter Config FilePath
 getArchivePath = to (\c -> c^.root </> ".arx")
 
 dbPath :: Getter Config FilePath
-dbPath = getArchivePath . to (\arch -> arch </> "arx.sqlite")
+dbPath = getArchivePath . to (\arch -> arch </> "cache.sqlite")
 

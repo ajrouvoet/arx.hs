@@ -15,6 +15,8 @@ import System.Directory
 import System.Posix.Files as Posix
 import Options.Applicative
 
+import Control.Monad.Logger
+
 import Debug.Trace
 
 import Arx
@@ -25,7 +27,6 @@ data Command
   -- Dupe Config
   -- | Snap Config
   -- | Diff BinaryOpts
-  -- | Init 
 
 data Filter = Filter { extensions :: String }
 data BinaryOpts = Binary { left :: String , right :: String , inc :: Bool }
@@ -83,7 +84,7 @@ commands = subparser
 --     logline (show dups)
 
 run :: Command → IO ()
-run (Init c) = void $ arx c (Arx.init :: Arx ())
+run (Init c) = void $ runStderrLoggingT $ arx c (Arx.init :: Arx ())
 -- run (Dupe c)   = void $ arx c (dupe :: Arx ())
 -- run (Diff (Binary l r i)) = do
 --   let lc = Config l i

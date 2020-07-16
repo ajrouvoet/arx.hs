@@ -20,10 +20,23 @@ import Database.Persist
 import Database.Persist.Sqlite
 import Database.Persist.TH
 
+import Crypto.Hash as Hash
+
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+Snap
+    snapshot String
+    finished UTCTime
+    deriving Show
 Object
+    snap    SnapId
     path    String
     digest  String
-    when    UTCTime default=CURRENT_TIME
+    UniquePath snap path
     deriving Show
 |]
+
+
+data PlainObject = Plain
+  { path   :: String
+  , digest :: Digest SHA1
+  }
