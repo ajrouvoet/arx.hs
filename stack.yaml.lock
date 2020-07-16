@@ -20,7 +20,7 @@ packages:
     hackage: haskeline-0.7.5.0
 snapshots:
 - completed:
-    size: 495203
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/13/8.yaml
-    sha256: 91139b0de6b320b13e27d5e6e6c368e239974b06fb9dc86d8d96da08697972ac
-  original: lts-13.8
+    size: 531707
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/5.yaml
+    sha256: 9751e25e0af5713a53ddcfcc79564b082c71b1b357fadef0d85672a5b5ba3703
+  original: lts-16.5
