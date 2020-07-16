@@ -40,11 +40,12 @@ import Arx.Archive
 
 -- | The Arx monad
 
-class (Monad m, MonadUnliftIO m, MonadIO m) ⇒ MonadArx m where
+class ( Monad m
+      , MonadUnliftIO m
+      , MonadIO m
+      , MonadLogger m) ⇒ MonadArx m where
 
   runArx          :: Config → m a → LoggingT IO a
-
-  -- configuration
   config          :: m Config
 
 type DbAction m a = ReaderT SqlBackend (NoLoggingT (ResourceT m)) a
@@ -69,7 +70,7 @@ withDb c = do
   liftIO (createDirectoryIfMissing True $ takeDirectory path)
   runSqlite (pack path) c
 
-init :: (MonadLogger m, MonadArx m) => m ()
+init :: (MonadArx m) => m ()
 init = do
   withDb $ runMigration migrateAll
   buildCache
@@ -106,7 +107,7 @@ buildFileCache snap path = do
   (Plain _ d) ← getObject path
   withDb $ insertEntity $ Object snap path (show d)
 
-copyFileCache :: (MonadLogger m, MonadArx m) => SnapId → SnapId → FilePath -> m (Entity Object)
+copyFileCache :: (MonadArx m) => SnapId → SnapId → FilePath -> m (Entity Object)
 copyFileCache snapFrom snapTo path = do
   do
     mObj ← withDb $ getBy (UniquePath snapFrom path)
@@ -116,15 +117,21 @@ copyFileCache snapFrom snapTo path = do
         buildFileCache snapTo path
       Just obj → withDb $ insertEntity $ Object snapTo path (objectDigest $ entityVal obj)
 
-buildFreshCache :: (MonadLogger m, MonadArx m) => SnapId → [FilePath] → m ()
+buildFreshCache :: (MonadArx m) => SnapId → [FilePath] → m ()
 buildFreshCache snap files = forM_ files $ \ file → do
   logInfoNS "arx:cache" (pack $ "Fresh cache for " ++ file)
   buildFileCache snap file
 
-buildCache :: (MonadLogger m, MonadArx m) => m ()
+buildCache :: (MonadArx m) => m ()
 buildCache = do
   mLatest ← withDb latestSnap
   snap    ← mkSnap
+
+  -- We iterate over all files in the current archive.
+  -- This ensures we will have cache entries if *and only if* the file currently
+  -- exists. We will try to get a cache entry from an earlier snapshot if the
+  -- modification time < latest snapshot time. If this fails, we create it
+  -- freshly. Cache misses are reported.
   files   ← allFiles
 
   case mLatest of
@@ -138,12 +145,17 @@ buildCache = do
 
         if modded
           then (do
-            logInfoNS "arx:cache" (pack $ "Modified: " ++ file)
+            logInfoNS "arx:cache" (pack $ "Changed: " ++ file)
             buildFileCache (entityKey snap) file
           ) else (do
             copyFileCache (entityKey latest) (entityKey snap) file
           )
 
+arx :: (MonadArx m) ⇒ Config → m a → LoggingT IO a
+arx c m = do
+  -- normalize the root
+  r ← liftIO $ makeAbsolute (c^.root)
+  runArx (Config r) m
 
 -- missing :: Snapshot → Snapshot → Map (Digest SHA1) Object
 -- missing mst cli = Map.difference  (byDigest cli) (byDigest mst)
@@ -223,7 +235,7 @@ buildCache = do
 -- snapPath :: Config → FilePath
 -- snapPath c = c^.root </> ".arx"
 
--- init :: (MonadArx m) ⇒ m 
+-- init :: (MonadArx m) ⇒ m
 
 -- insertObject :: (MonadArx m) ⇒ Object → m ()
 -- insertObject o = do
@@ -261,9 +273,3 @@ buildCache = do
 -- duplicates = do
 --   objs ← (HM.elems . byPath) <$> snapshot
 --   return $ dupeOf objs
-
-arx :: (MonadArx m) ⇒ Config → m a → LoggingT IO a
-arx c m = do
-  -- normalize the root
-  r ← liftIO $ makeAbsolute (c^.root)
-  runArx (Config r) m
