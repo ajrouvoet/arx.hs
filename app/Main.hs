@@ -80,9 +80,14 @@ run (Contains f) = do
   f' ← makeAbsolute f
   matches ← runStderrLoggingT $ arx c (Arx.checkFile f' :: Arx _)
 
-  putStrLn "Found the following matches:"
-  forM_ matches $ \eObj → do
-    putStrLn ("> " ++ (objectPath $ entityVal eObj))
+  if matches == []
+    then do
+      putStrLn "No matches found"
+      exitFailure
+    else do
+      putStrLn "Found the following matches:"
+      forM_ matches $ \eObj → do
+        putStrLn ("> " ++ (objectPath $ entityVal eObj))
 
 main :: IO ()
 main = do

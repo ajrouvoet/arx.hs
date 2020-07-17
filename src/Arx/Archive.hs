@@ -7,8 +7,9 @@
 {-# LANGUAGE QuasiQuotes                #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 module Arx.Archive where
 
@@ -32,7 +33,7 @@ Object
     path    String
     digest  String
     UniquePath snap path
-    deriving Show
+    deriving Show Eq
 |]
 
 
