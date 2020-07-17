@@ -1,3 +1,4 @@
+{-# LANGUAGE PartialTypeSignatures #-}
 module Main where
 
 import Control.Monad
@@ -13,95 +14,75 @@ import System.FilePath
 import System.FilePath.Find as Find
 import System.Directory
 import System.Posix.Files as Posix
+import System.Exit
 import Options.Applicative
+
+import Database.Persist.Sqlite
 
 import Control.Monad.Logger
 
 import Debug.Trace
 
 import Arx
+import Arx.Archive
+import Arx.Config
 import qualified Arx as Arx
 
 data Command
   = Init Config
-  -- Dupe Config
-  -- | Snap Config
-  -- | Diff BinaryOpts
+  | Cache
+  | Contains FilePath
 
-data Filter = Filter { extensions :: String }
-data BinaryOpts = Binary { left :: String , right :: String , inc :: Bool }
-
-fileFilters :: Parser Filter
-fileFilters = Filter <$> argument str (metavar "filter" <> help "Comma separated file exts to include")
-
-parseInc =
-  flag True False (long "no-increment" <> short 'i' <> help "Whether or not to use existing summaries")
-
-unaryOpts :: Parser Config
-unaryOpts =
+initOpts :: Parser Config
+initOpts =
    Config
     <$> argument str (metavar "ARCHIVE" <> help "The archive root")
 
--- binaryOpts :: Parser Command
--- binaryOpts = Diff <$>
---   ( Binary
---     <$> argument str (metavar "MASTER" <> help "the master archive")
---     <*> argument str (metavar "CLIENT" <> help "the client archive")
---     <*> parseInc
---   )
+fileOpt :: Parser String
+fileOpt = argument str (metavar "PATH" <> help "File path")
 
 commands :: Parser Command
 commands = subparser
-  ( command "init"
-     (info (Init <$> unaryOpts <**> helper)
+  (  command "init"
+     (info (Init <$> initOpts <**> helper)
            (fullDesc <> progDesc "Initialize archive"))
+  <> command "cache"
+     (info (pure Cache)
+           (fullDesc <> progDesc "Update the archive cache"))
+  <> command "has"
+     (info (Contains <$> fileOpt <**> helper)
+           (fullDesc <> progDesc "Check if the "))
   )
-   -- ( command "dupe"
-   --   (info (Dupe <$> unaryOpts <**> helper)
-   --         (fullDesc <> progDesc "Find duplicates in an archive"))
-   -- <> command "diff"
-   --   (info (binaryOpts <**> helper)
-   --         (fullDesc <> progDesc "Asymmetrical difference between archives")
-   --   )
-   -- <> command "snap"
-   --   (info (Snap <$> unaryOpts <**> helper)
-   --         (fullDesc <> progDesc "Summarize archive content")
-   --   )
-   -- )
 
--- snap :: (MonadArx m) ⇒ m Snapshot
--- snap = do
---   s ← updateSnapshot
---   p ← snapPath <$> config
---   liftIO $ writeSnapshot p s
---   return s
-
--- dupe :: (MonadArx m) ⇒ m ()
--- dupe = do
---   s ← updateSnapshot
---   dups ← duplicates
---   forM_ dups $ \ds → do
---     logline (show dups)
+findArxConfig :: IO Config
+findArxConfig = do
+  path ← getCurrentDirectory
+  findRoot path
+  where
+    findRoot :: FilePath → IO Config
+    findRoot p = do
+      let root = (p </> arxDir)
+      exists ← doesPathExist root
+      if exists
+        then return $ Config p
+        else
+          if p == "/"
+          then exitFailure
+          else findRoot (takeDirectory p)
 
 run :: Command → IO ()
-run (Init c) = void $ runStderrLoggingT $ arx c (Arx.init :: Arx ())
--- run (Dupe c)   = void $ arx c (dupe :: Arx ())
--- run (Diff (Binary l r i)) = do
---   let lc = Config l i
---   let rc = Config r i
+run (Init c)  = void $ runStderrLoggingT $ arx c (Arx.init :: Arx ())
+run Cache = do
+  c ← findArxConfig
+  runStderrLoggingT $ arx c (Arx.buildCache :: Arx ())
+run (Contains f) = do
+  c  ← findArxConfig
+  f' ← makeAbsolute f
+  matches ← runStderrLoggingT $ arx c (Arx.checkFile f' :: Arx _)
 
---   left  ← arx lc (snap :: Arx Snapshot)
---   right ← arx rc (snap :: Arx Snapshot)
-
---   let miss = missing left right
-
---   logline $ (show $ numUnique left) ++ " unique files in master"
---   logline $ (show $ numUnique right) ++ " unique files in client"
-
---   putStrLn $ "Missing files (" ++ show (size miss) ++ "):"
---   forM_ miss $ \obj → do
---     logline (show obj)
--- run (Snap c)   = void $ arx c (snap :: Arx Snapshot)
+  putStrLn "Found the following matches:"
+  forM_ matches $ \eObj → do
+    putStrLn ("> " ++ (objectPath $ entityVal eObj))
 
 main :: IO ()
 main = do

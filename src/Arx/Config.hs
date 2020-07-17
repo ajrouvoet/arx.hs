@@ -9,9 +9,15 @@ data Config = Config
 
 makeLenses ''Config
 
+arxDir :: String
+arxDir = ".arx"
+
+cache :: String
+cache = "cache.sqlite"
+
 getArchivePath :: Getter Config FilePath
-getArchivePath = to (\c -> c^.root </> ".arx")
+getArchivePath = to (\c -> c^.root </> arxDir)
 
 dbPath :: Getter Config FilePath
-dbPath = getArchivePath . to (\arch -> arch </> "cache.sqlite")
+dbPath = getArchivePath . to (\arch -> arch </> cache)
 

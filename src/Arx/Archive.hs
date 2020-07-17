@@ -24,7 +24,7 @@ import Crypto.Hash as Hash
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Snap
-    snapshot String
+    archive  String
     finished UTCTime
     deriving Show
 Object

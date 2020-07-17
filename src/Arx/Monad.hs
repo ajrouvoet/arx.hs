@@ -50,9 +50,6 @@ class ( Monad m
 
 type DbAction m a = ReaderT SqlBackend (NoLoggingT (ResourceT m)) a
 
-defaultSnap :: Snap
-defaultSnap = Snap "<current>" (UTCTime (ModifiedJulianDay 0) 0)
-
 latestSnap :: (MonadArx m) => DbAction m (Maybe (Entity Snap))
 latestSnap = do
   selectFirst
@@ -61,8 +58,9 @@ latestSnap = do
 
 mkSnap :: (MonadArx m) => m (Entity Snap)
 mkSnap = do
+  archive ← _root <$> config
   time ← liftIO $ getCurrentTime
-  withDb $ insertEntity $ Snap "<current>" time
+  withDb $ insertEntity $ Snap archive time
 
 withDb :: (MonadArx m) => DbAction m a → m a
 withDb c = do
@@ -150,6 +148,20 @@ buildCache = do
           ) else (do
             copyFileCache (entityKey latest) (entityKey snap) file
           )
+
+checkFile :: (MonadArx m) ⇒ FilePath → m [Entity Object]
+checkFile path = do
+  obj ← getObject path
+  withDb $ do
+    latest ← latestSnap
+    case latest of
+      Nothing   → return []
+      Just snap → do
+        let sid = entityKey snap
+        selectList
+          [ ObjectSnap   ==. sid
+          , ObjectDigest ==. (show $ digest obj) ]
+          []
 
 arx :: (MonadArx m) ⇒ Config → m a → LoggingT IO a
 arx c m = do
