@@ -92,7 +92,7 @@ run Contains = do
       else do
         putStrLn "+ Found the following matches:"
         forM_ matches $ \eObj → do
-          putStrLn ("\t► " ++ (objectPath $ entityVal eObj))
+          putStrLn ("\t> " ++ (objectPath $ entityVal eObj))
 
     putStrLn ""
 
