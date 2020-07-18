@@ -31,7 +31,7 @@ import qualified Arx as Arx
 data Command
   = Init Config
   | Cache
-  | Contains FilePath
+  | Contains
 
 initOpts :: Parser Config
 initOpts =
@@ -50,8 +50,10 @@ commands = subparser
      (info (pure Cache)
            (fullDesc <> progDesc "Update the archive cache"))
   <> command "has"
-     (info (Contains <$> fileOpt <**> helper)
-           (fullDesc <> progDesc "Check if the "))
+     (info (pure Contains)
+           (fullDesc <> progDesc
+             (  "Read newline separated paths from stdin,"
+             ++ "and check if they are contained in the archive.")))
   )
 
 findArxConfig :: IO Config
@@ -75,19 +77,24 @@ run (Init c)  = void $ runStderrLoggingT $ arx c (Arx.init :: Arx ())
 run Cache = do
   c ← findArxConfig
   runStderrLoggingT $ arx c (Arx.buildCache :: Arx ())
-run (Contains f) = do
-  c  ← findArxConfig
-  f' ← makeAbsolute f
-  matches ← runStderrLoggingT $ arx c (Arx.checkFile f' :: Arx _)
+run Contains = do
+  c     ← findArxConfig
+  paths ← lines <$> getContents
 
-  if matches == []
-    then do
-      putStrLn "No matches found"
-      exitFailure
-    else do
-      putStrLn "Found the following matches:"
-      forM_ matches $ \eObj → do
-        putStrLn ("> " ++ (objectPath $ entityVal eObj))
+  forM_ paths $ \f → do
+    f'      ← makeAbsolute f
+    matches ← runStderrLoggingT $ arx c (Arx.checkFile f' :: Arx _)
+
+    putStrLn ("? " ++ f')
+    if matches == []
+      then do
+        putStrLn "- No matches found"
+      else do
+        putStrLn "+ Found the following matches:"
+        forM_ matches $ \eObj → do
+          putStrLn ("\t► " ++ (objectPath $ entityVal eObj))
+
+    putStrLn ""
 
 main :: IO ()
 main = do
