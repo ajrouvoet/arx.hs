@@ -49,6 +49,12 @@ dependencies:
 - unliftio-core
 - monad-logger
 - resourcet
+- http-types
+- wai
+- warp
+- blaze-builder
+- aeson
+- scotty
 
 library:
   source-dirs: src
@@ -72,7 +78,8 @@ default-extensions:
 - TypeApplications
 - TypeFamilies
 - UnicodeSyntax
-  
+- PartialTypeSignatures
+
 executables:
   arx:
     main:                Main.hs

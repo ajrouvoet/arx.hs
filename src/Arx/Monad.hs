@@ -152,6 +152,10 @@ buildCache = do
 checkFile :: (MonadArx m) ⇒ FilePath → m [Entity Object]
 checkFile path = do
   obj ← getObject path
+  checkDig (show $ digest obj)
+
+checkDig :: (MonadArx m) ⇒ String → m [Entity Object]
+checkDig dig = do
   withDb $ do
     latest ← latestSnap
     case latest of
@@ -160,7 +164,7 @@ checkFile path = do
         let sid = entityKey snap
         selectList
           [ ObjectSnap   ==. sid
-          , ObjectDigest ==. (show $ digest obj) ]
+          , ObjectDigest ==. dig ]
           []
 
 arx :: (MonadArx m) ⇒ Config → m a → LoggingT IO a

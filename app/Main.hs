@@ -1,4 +1,3 @@
-{-# LANGUAGE PartialTypeSignatures #-}
 module Main where
 
 import Control.Monad
@@ -26,12 +25,14 @@ import Debug.Trace
 import Arx
 import Arx.Archive
 import Arx.Config
+import Arx.Server
 import qualified Arx as Arx
 
 data Command
   = Init Config
   | Cache
   | Contains
+  | Serve
 
 initOpts :: Parser Config
 initOpts =
@@ -46,6 +47,9 @@ commands = subparser
   (  command "init"
      (info (Init <$> initOpts <**> helper)
            (fullDesc <> progDesc "Initialize archive"))
+  <> command "serve"
+     (info (pure Serve)
+           (fullDesc <> progDesc "Start an archive server"))
   <> command "cache"
      (info (pure Cache)
            (fullDesc <> progDesc "Update the archive cache"))
@@ -69,7 +73,7 @@ findArxConfig = do
         then return $ Config p
         else
           if p == "/"
-          then exitFailure
+          then do putStrLn "Not in an Arx repository"; exitFailure
           else findRoot (takeDirectory p)
 
 run :: Command → IO ()
@@ -77,15 +81,17 @@ run (Init c)  = void $ runStderrLoggingT $ arx c (Arx.init :: Arx ())
 run Cache = do
   c ← findArxConfig
   runStderrLoggingT $ arx c (Arx.buildCache :: Arx ())
+run Serve = do
+  c ← findArxConfig
+  server c
 run Contains = do
   c     ← findArxConfig
   paths ← lines <$> getContents
 
   forM_ paths $ \f → do
-    f'      ← makeAbsolute f
-    matches ← runStderrLoggingT $ arx c (Arx.checkFile f' :: Arx _)
+    matches ← runStderrLoggingT $ arx c (Arx.checkFile f :: Arx _)
 
-    putStrLn ("? " ++ f')
+    putStrLn ("? " ++ f)
     if matches == []
       then do
         putStrLn "- No matches found"
