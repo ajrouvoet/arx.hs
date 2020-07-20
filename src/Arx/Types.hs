@@ -14,27 +14,11 @@ import System.Posix.Types
 import Arx.Config
 import Arx.Monad
 
--- data ArxSt = ArxSt
---   { _snaps       :: Snapshot
---   , _snappedTime :: UnixTime
---   }
-
--- instance Default ArxSt where
---   def = ArxSt def (UnixTime 0 0)
-
--- makeLenses ''ArxSt
-
 type Arx = ReaderT Config (LoggingT IO)
 
 instance MonadArx Arx where
 
   config         = ask
-
-  -- snappedAt      = use snappedTime
-  -- snapshot       = use snaps
-
-  -- snapshotModify  f = snaps %= f
-  -- snappedAtModify v = snappedTime %= const v
 
   runArx c m = do
     runReaderT m c
