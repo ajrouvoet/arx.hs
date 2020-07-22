@@ -2,6 +2,7 @@ module Arx.Types where
 
 import Data.Default
 import Data.UnixTime
+import Data.Text
 
 import Control.Lens
 import Control.Monad.Reader
@@ -17,9 +18,17 @@ import Arx.Config
 import Arx.Archive
 import Arx.Monad
 
-type Arx = ReaderT Config (LoggingT IO)
+type Arx = ReaderT (Config, SqlBackend) (LoggingT IO)
 
+-- Implementation of MonadArx
+-- that uses an sqlite file as a cache.
 instance MonadArx Arx where
-  config     = ask
+  config     = fst <$> ask
+
+  runQuery a = do
+    backend ← snd <$> ask
+    runReaderT a backend
+    
   runArx c m = do
-    runReaderT m c
+    withSqliteConn (pack $ _root c) (\backend → runReaderT m (c, backend))
+    

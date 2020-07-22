@@ -2,9 +2,7 @@
 module Arx.Monad where
 
 -- import Data.UnixTime
-import Data.Map.Strict as Map
 import Data.Maybe
-import Data.Default
 import Data.Text (pack)
 import Data.Time
 import Data.Time.Clock.POSIX
@@ -39,9 +37,10 @@ class ( Monad m
       , MonadLogger m) ⇒ MonadArx m where
 
   runArx          :: Config → m a → LoggingT IO a
+  runQuery        :: DbAction m a → m a
   config          :: m Config
 
-type DbAction m a = ReaderT SqlBackend (NoLoggingT (ResourceT m)) a
+type DbAction m a = ReaderT SqlBackend m a
 
 latestSnap :: (MonadArx m) => DbAction m (Maybe (Entity Snap))
 latestSnap = do
@@ -53,17 +52,13 @@ mkSnap :: (MonadArx m) => m (Entity Snap)
 mkSnap = do
   archive ← _root <$> config
   time ← liftIO $ getCurrentTime
-  withDb $ insertEntity $ Snap archive time
-
-withDb :: (MonadArx m) => DbAction m a → m a
-withDb c = do
-  path ← (\c → c^.dbPath) <$> config
-  liftIO (createDirectoryIfMissing True $ takeDirectory path)
-  runSqlite (pack path) c
+  runQuery $ insertEntity $ Snap archive time
 
 init :: (MonadArx m) => m ()
 init = do
-  withDb $ runMigration migrateAll
+  path ← (\c → c^.dbPath) <$> config
+  liftIO (createDirectoryIfMissing True $ takeDirectory path)
+  runQuery $ runMigration migrateAll
   buildCache
 
 getObject :: (MonadIO m) ⇒ FilePath → m PlainObject
@@ -96,17 +91,17 @@ modifiedFiles since = do
 buildFileCache :: (MonadArx m) => SnapId → FilePath -> m (Entity Object)
 buildFileCache snap path = do
   (Plain _ d) ← getObject path
-  withDb $ insertEntity $ Object snap path (show d)
+  runQuery $ insertEntity $ Object snap path (show d)
 
 copyFileCache :: (MonadArx m) => SnapId → SnapId → FilePath -> m (Entity Object)
 copyFileCache snapFrom snapTo path = do
   do
-    mObj ← withDb $ getBy (UniquePath snapFrom path)
+    mObj ← runQuery $ getBy (UniquePath snapFrom path)
     case mObj of
       Nothing  → do
         logWarnNS "arx:cache" (pack $ "Cache miss for " ++ path)
         buildFileCache snapTo path
-      Just obj → withDb $ insertEntity $ Object snapTo path (objectDigest $ entityVal obj)
+      Just obj → runQuery $ insertEntity $ Object snapTo path (objectDigest $ entityVal obj)
 
 buildFreshCache :: (MonadArx m) => SnapId → [FilePath] → m ()
 buildFreshCache snap files = forM_ files $ \ file → do
@@ -115,7 +110,7 @@ buildFreshCache snap files = forM_ files $ \ file → do
 
 buildCache :: (MonadArx m) => m ()
 buildCache = do
-  mLatest ← withDb latestSnap
+  mLatest ← runQuery latestSnap
   snap    ← mkSnap
 
   -- We iterate over all files in the current archive.
@@ -149,7 +144,7 @@ checkFile path = do
 
 checkDig :: (MonadArx m) ⇒ String → m [Entity Object]
 checkDig dig = do
-  withDb $ do
+  runQuery $ do
     latest ← latestSnap
     case latest of
       Nothing   → return []
