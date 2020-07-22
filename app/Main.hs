@@ -29,10 +29,12 @@ import Arx.Server
 import Arx.Client
 import qualified Arx as Arx
 
+type ClientConf = Maybe RemoteConfig
+
 data Command
   = Init Config
   | Cache
-  | Contains { remote :: Maybe RemoteConfig }
+  | Contains { remote :: ClientConf }
   | Serve
 
 initOpts :: Parser Config
@@ -84,8 +86,6 @@ findArxConfig = do
           then do putStrLn "Not in an Arx repository"; exitFailure
           else findRoot (takeDirectory p)
 
-type ClientConf = Maybe RemoteConfig
-
 getClient :: ClientConf → IO Client
 getClient Nothing = do
   c ← findArxConfig
@@ -94,33 +94,37 @@ getClient (Just c) = do
   return $ remoteClient c
 
 run :: Command → IO ()
-run (Init c)  = void $ arx c (Arx.init :: Arx ())
+
+run (Init c) = do
+  void $ arx c (Arx.init :: Arx ())
+
 run Cache = do
   c ← findArxConfig
   arx c (Arx.buildCache :: Arx ())
+
 run Serve = do
   c ← findArxConfig
   server c
+
 run (Contains r) = do
   Client{..} ← getClient r
-  paths ← lines <$> getContents
+  paths      ← lines <$> getContents
+  objs       ← mapM getObject paths
+  matches    ← hasDigest objs
+  void $ mapM printMatches matches
 
-  objs ← forM paths $ \f → do
-    getObject f
-
-  matches ← hasDigest objs
-
-  forM_ matches $ \(f, matches) → do
-    putStrLn ("? " ++ f)
-    if matches == []
-      then do
-        putStrLn "- No matches found"
-      else do
-        putStrLn "+ Found the following matches:"
-        forM_ matches $ \match → do
-          putStrLn ("\t> " ++ match)
-
-    putStrLn ""
+  where
+    -- print the matches for a single queried path
+    printMatches (f, matches) = do
+      putStrLn ("? " ++ f)
+      if matches == []
+        then do
+          putStrLn "- No matches found"
+        else do
+          putStrLn "+ Found the following matches:"
+          forM_ matches $ \match → do
+            putStrLn ("\t> " ++ match)
+      putStrLn ""
 
 main :: IO ()
 main = do

@@ -20,13 +20,17 @@ import Arx.Archive
 import Arx.Config
 import qualified Arx as Arx
 
+-- Handle root requests
 handler :: Config → PlainObject → ActionT _ IO (FilePath, [FilePath])
 handler c (Plain fp dig) = do
   matches ← liftIO $ arx c (Arx.checkDig dig :: Arx _)
   return (fp, fmap (objectPath . entityVal) matches)
 
+-- The REST API of the server
 app :: Config → ScottyM ()
 app c = do
+
+  -- root path
   post "/" $ do
     reqs :: DigestsReqs ← jsonData
     resp ← forM reqs (handler c)
@@ -34,5 +38,6 @@ app c = do
     liftIO $ putStrLn "Handled request"
     json resp
 
+-- Entrypoint of the server.
 server :: Config → IO ()
 server c = scotty 8888 (app c)

@@ -23,13 +23,14 @@ import Network.HTTP.Req
 
 type Digest = String
 
+-- The interface that a client must support
 type DigestsReqs = [PlainObject]
 type DigestsResp = [(FilePath, [FilePath])]
-data Client = Client {
-  hasDigest :: DigestsReqs → IO DigestsResp
+data Client = Client
+  { hasDigest :: DigestsReqs → IO DigestsResp
   }
 
--- local clients
+-- Client to a local archive
 localClient :: Config → Client
 localClient c = Client { hasDigest = mapM hasDig }
   where
@@ -43,6 +44,7 @@ data RemoteConfig = Remote
   , _port :: Int
   }
 
+-- Client to a remote Arx server
 remoteClient :: RemoteConfig → Client
 remoteClient Remote{..} = Client { hasDigest = hasDig }
   where

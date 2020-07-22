@@ -20,17 +20,6 @@ import Arx.Monad
 type Arx = ReaderT Config (LoggingT IO)
 
 instance MonadArx Arx where
-
-  config         = ask
-
+  config     = ask
   runArx c m = do
     runReaderT m c
-
--- instance ArxCache Arx where
-
---   hasDigest dig = do
---     objs ← checkDig dig
---     return (objectPath . entityVal <$> objs)
-
---   execCache m = do
---     runStderrLoggingT $ runArx c m
