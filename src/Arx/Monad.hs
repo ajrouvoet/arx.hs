@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Arx.Monad where
 
 -- import Data.UnixTime
@@ -16,7 +17,6 @@ import Control.Monad.Reader
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
 
--- import System.IO
 import System.Directory
 import System.Posix.Time
 import System.Posix.Files as Posix
@@ -68,8 +68,8 @@ init = do
 
 getObject :: (MonadIO m) ⇒ FilePath → m PlainObject
 getObject path = do
-  dig ← liftIO $ hashFile path
-  return $ Plain path dig
+  dig :: Digest SHA1 ← liftIO $ hashFile path
+  return $ Plain path (show dig)
 
 utcToEpochTime = fromIntegral . floor . utcTimeToPOSIXSeconds
 
@@ -160,8 +160,8 @@ checkDig dig = do
           , ObjectDigest ==. dig ]
           []
 
-arx :: (MonadArx m) ⇒ Config → m a → LoggingT IO a
+arx :: (MonadArx m) ⇒ Config → m a → IO a
 arx c m = do
   -- normalize the root
   r ← liftIO $ makeAbsolute (c^.root)
-  runArx (Config r) m
+  runStderrLoggingT $ runArx (Config r) m

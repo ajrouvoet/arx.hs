@@ -7,41 +7,31 @@ import Control.Monad.IO.Class
 import Control.Monad.Logger
 
 import Web.Scotty
+import Web.Scotty.Trans (ActionT)
 import Data.Aeson hiding (json)
+import Data.Text
 
 import Database.Persist.Sqlite
 
 import Arx.Config
 import Arx
+import Arx.Client
 import Arx.Archive
 import Arx.Config
 import qualified Arx as Arx
 
-data Req
-  = Has { digest :: String }
-  deriving (Generic, Show)
-
-data Resp
-  = Here    { matches :: [FilePath] }
-  | Nothere
-  deriving (Generic, Show)
-
-instance FromJSON Req
-instance ToJSON Req
-
-instance FromJSON Resp
-instance ToJSON Resp
+handler :: Config → PlainObject → ActionT _ IO (FilePath, [FilePath])
+handler c (Plain fp dig) = do
+  matches ← liftIO $ arx c (Arx.checkDig dig :: Arx _)
+  return (fp, fmap (objectPath . entityVal) matches)
 
 app :: Config → ScottyM ()
 app c = do
   post "/" $ do
-    reqs :: [Req] ← jsonData
-    resp ← forM reqs $ \(Has dig) → do
-      matches ← liftIO $ runStderrLoggingT $ arx c (Arx.checkDig dig :: Arx _)
-      if matches == []
-        then return Nothere
-        else return (Here (objectPath . entityVal <$> matches))
+    reqs :: DigestsReqs ← jsonData
+    resp ← forM reqs (handler c)
 
+    liftIO $ putStrLn "Handled request"
     json resp
 
 server :: Config → IO ()

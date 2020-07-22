@@ -11,7 +11,10 @@ import Control.Monad.Logger
 import System.Posix.Files as Posix
 import System.Posix.Types
 
+import Database.Persist.Sqlite
+
 import Arx.Config
+import Arx.Archive
 import Arx.Monad
 
 type Arx = ReaderT Config (LoggingT IO)
@@ -22,3 +25,12 @@ instance MonadArx Arx where
 
   runArx c m = do
     runReaderT m c
+
+-- instance ArxCache Arx where
+
+--   hasDigest dig = do
+--     objs ← checkDig dig
+--     return (objectPath . entityVal <$> objs)
+
+--   execCache m = do
+--     runStderrLoggingT $ runArx c m

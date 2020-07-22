@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GADTs                      #-}
@@ -13,15 +14,15 @@
 
 module Arx.Archive where
 
--- The archive database
+import GHC.Generics
 
 import Data.Time
+import System.FilePath
+import Data.Aeson hiding (Object)
 
 import Database.Persist
 import Database.Persist.Sqlite
 import Database.Persist.TH
-
-import Crypto.Hash as Hash
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Snap
@@ -39,5 +40,13 @@ Object
 
 data PlainObject = Plain
   { path   :: String
-  , digest :: Digest SHA1
-  }
+  , digest :: String
+  } deriving (Generic)
+
+instance ToJSON PlainObject
+instance FromJSON PlainObject
+
+class ArxCache m where
+
+  hasDigest :: String → m [FilePath]
+  execCache :: m a → IO a

@@ -55,6 +55,7 @@ dependencies:
 - blaze-builder
 - aeson
 - scotty
+- req
 
 library:
   source-dirs: src
@@ -79,6 +80,7 @@ default-extensions:
 - TypeFamilies
 - UnicodeSyntax
 - PartialTypeSignatures
+- RecordWildCards
 
 executables:
   arx:

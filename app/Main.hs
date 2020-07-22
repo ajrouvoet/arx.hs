@@ -26,18 +26,26 @@ import Arx
 import Arx.Archive
 import Arx.Config
 import Arx.Server
+import Arx.Client
 import qualified Arx as Arx
 
 data Command
   = Init Config
   | Cache
-  | Contains
+  | Contains { remote :: Maybe RemoteConfig }
   | Serve
 
 initOpts :: Parser Config
 initOpts =
    Config
     <$> argument str (metavar "ARCHIVE" <> help "The archive root")
+
+containOpts :: Parser Command
+containOpts =
+ Contains <$> (optional $ (\ad → Remote ad 8888) <$> (strOption
+                (long "remote" <> short 'r'
+                <> metavar "REMOTE"
+                <> help "remote Arx server addr")))
 
 fileOpt :: Parser String
 fileOpt = argument str (metavar "PATH" <> help "File path")
@@ -54,7 +62,7 @@ commands = subparser
      (info (pure Cache)
            (fullDesc <> progDesc "Update the archive cache"))
   <> command "has"
-     (info (pure Contains)
+     (info containOpts
            (fullDesc <> progDesc
              (  "Read newline separated paths from stdin,"
              ++ "and check if they are contained in the archive.")))
@@ -76,29 +84,41 @@ findArxConfig = do
           then do putStrLn "Not in an Arx repository"; exitFailure
           else findRoot (takeDirectory p)
 
+type ClientConf = Maybe RemoteConfig
+
+getClient :: ClientConf → IO Client
+getClient Nothing = do
+  c ← findArxConfig
+  return $ localClient c
+getClient (Just c) = do
+  return $ remoteClient c
+
 run :: Command → IO ()
-run (Init c)  = void $ runStderrLoggingT $ arx c (Arx.init :: Arx ())
+run (Init c)  = void $ arx c (Arx.init :: Arx ())
 run Cache = do
   c ← findArxConfig
-  runStderrLoggingT $ arx c (Arx.buildCache :: Arx ())
+  arx c (Arx.buildCache :: Arx ())
 run Serve = do
   c ← findArxConfig
   server c
-run Contains = do
-  c     ← findArxConfig
+run (Contains r) = do
+  Client{..} ← getClient r
   paths ← lines <$> getContents
 
-  forM_ paths $ \f → do
-    matches ← runStderrLoggingT $ arx c (Arx.checkFile f :: Arx _)
+  objs ← forM paths $ \f → do
+    getObject f
 
+  matches ← hasDigest objs
+
+  forM_ matches $ \(f, matches) → do
     putStrLn ("? " ++ f)
     if matches == []
       then do
         putStrLn "- No matches found"
       else do
         putStrLn "+ Found the following matches:"
-        forM_ matches $ \eObj → do
-          putStrLn ("\t> " ++ (objectPath $ entityVal eObj))
+        forM_ matches $ \match → do
+          putStrLn ("\t> " ++ match)
 
     putStrLn ""
 
