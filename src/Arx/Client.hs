@@ -56,7 +56,7 @@ remoteClient Remote{..} = Client { hasDigest = hasDig }
       r ← runReq defaultHttpConfig $ req POST (http $ pack _addr)
         (ReqBodyJson $ body)
         jsonResponse
-        (port _port)
+        (port _port <> responseTimeout 600000000)
       putStrLn $ "[arx:client] Post request"
       resp :: Result DigestsResp ← return $ fromJSON $ responseBody r
       putStrLn $ "[arx:client] Post decode"

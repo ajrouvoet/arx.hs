@@ -107,10 +107,15 @@ run Serve = do
   server c
 
 run (Contains r) = do
+  putStrLn "[arx:main] Client"
   Client{..} ← getClient r
+  putStrLn "[arx:main] Parse"
   paths      ← lines <$> getContents
+  putStrLn "[arx:main] Get digests"
   objs       ← mapM getObject paths
+  putStrLn "[arx:main] Request matches"
   matches    ← hasDigest objs
+  putStrLn "[arx:main] Outputing"
   void $ mapM printMatches matches
 
   where
