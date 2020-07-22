@@ -50,11 +50,16 @@ remoteClient Remote{..} = Client { hasDigest = hasDig }
   where
     hasDig :: DigestsReqs → IO DigestsResp
     hasDig digs = do
+      putStrLn $ "[arx:client] Pre encode"
+      body ← return $ toJSON digs
+      putStrLn $ "[arx:client] Pre request"
       r ← runReq defaultHttpConfig $ req POST (http $ pack _addr)
-        (ReqBodyJson $ toJSON digs)
+        (ReqBodyJson $ body)
         jsonResponse
         (port _port)
-      let resp :: Result DigestsResp = fromJSON $ responseBody r
+      putStrLn $ "[arx:client] Post request"
+      resp :: Result DigestsResp ← return $ fromJSON $ responseBody r
+      putStrLn $ "[arx:client] Post decode"
       case resp of
         Success r → return r
         Error msg → do
