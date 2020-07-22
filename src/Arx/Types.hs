@@ -30,5 +30,5 @@ instance MonadArx Arx where
     runReaderT a backend
     
   runArx c m = do
-    withSqliteConn (pack $ _root c) (\backend → runReaderT m (c, backend))
+    withSqliteConn (pack $ c ^. dbPath) (\backend → runReaderT m (c, backend))
     

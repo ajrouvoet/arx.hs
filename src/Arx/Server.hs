@@ -9,7 +9,6 @@ import Control.Monad.Logger
 import Web.Scotty
 import Web.Scotty.Trans (ActionT)
 import Data.Aeson hiding (json)
-import Data.Text
 
 import Database.Persist.Sqlite
 
@@ -33,6 +32,9 @@ app c = do
   -- root path
   post "/" $ do
     reqs :: DigestsReqs ← jsonData
+    liftIO $ putStrLn $ "[arx:serve] Decode request for "
+      <> show (length reqs)
+      <> " digests"
     resp ← forM reqs (handler c)
 
     liftIO $ putStrLn "Handled request"
