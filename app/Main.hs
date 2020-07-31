@@ -81,7 +81,6 @@ findArxConfig = do
       exists ← doesPathExist root
       if exists
         then do
-          putStrLn $ "Found archive at '" <> p <> "'"
           return $ Config p
         else
           if p == "/"
@@ -91,8 +90,10 @@ findArxConfig = do
 getClient :: ClientConf → IO Client
 getClient Nothing = do
   c ← findArxConfig
+  putStrLn $ "Local archive at '" <> _root c <> "'"
   return $ localClient c
 getClient (Just c) = do
+  putStrLn $ "Remote archive at `" <> show c <> "'"
   return $ remoteClient c
 
 run :: Command → IO ()

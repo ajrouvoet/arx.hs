@@ -44,6 +44,9 @@ data RemoteConfig = Remote
   , _port :: Int
   }
 
+instance Show RemoteConfig where
+  show Remote{..} = _addr <> ":" <> show _port
+
 -- Client to a remote Arx server
 remoteClient :: RemoteConfig → Client
 remoteClient Remote{..} = Client { hasDigest = hasDig }
