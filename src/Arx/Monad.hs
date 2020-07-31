@@ -6,6 +6,7 @@ import Data.Maybe
 import Data.Text (pack)
 import Data.Time
 import Data.Time.Clock.POSIX
+import Data.List.Split
 
 import Control.Lens
 import Control.Monad
@@ -65,6 +66,19 @@ getObject :: (MonadIO m) ⇒ FilePath → m PlainObject
 getObject path = do
   dig :: Digest SHA1 ← liftIO $ hashFile path
   return $ Plain path (show dig)
+
+-- Given a string of format "<path>(\t<digest)?", we give a plain object.
+-- If the digest is not provided, we recompute it.
+parseOrGetObject :: (MonadIO m) ⇒ String → m PlainObject
+parseOrGetObject line = do
+  case (splitOn "\t" line) of
+    -- Already have a hash
+    fp : dig : _ -> do
+      -- We validate the hash format
+      let dig' :: Digest SHA1 = read dig
+      return (Plain fp $ show dig')
+    fp : [] -> do
+      getObject fp
 
 utcToEpochTime = fromIntegral . floor . utcTimeToPOSIXSeconds
 

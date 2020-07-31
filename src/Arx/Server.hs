@@ -10,7 +10,7 @@ import Web.Scotty
 import Web.Scotty.Trans (ActionT)
 import Data.Aeson hiding (json)
 
-import Database.Persist.Sqlite
+import Database.Persist.Sqlite hiding (get)
 
 import Arx.Config
 import Arx
@@ -29,8 +29,11 @@ handler c (Plain fp dig) = do
 app :: Config → ScottyM ()
 app c = do
 
-  -- root path
-  post "/" $ do
+  get (regex "^/photos/(.*)$") $ do
+    path ← param "1"
+    text ("Requested: " <> path)
+
+  post "/contains" $ do
     reqs :: DigestsReqs ← jsonData
     liftIO $ putStrLn $ "[arx:serve] Decode request for "
       <> show (length reqs)
