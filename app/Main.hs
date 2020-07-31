@@ -84,7 +84,11 @@ findArxConfig = do
         else
           if p == "/"
           then do putStrLn "Not in an Arx repository"; exitFailure
-          else findRoot (takeDirectory p)
+          else
+            let next = takeDirectory p
+            in if next /= p then findRoot next else do
+              putStrLn "Reached / -- no Arx archive found"
+              exitFailure
 
 getClient :: ClientConf → IO Client
 getClient Nothing = do
@@ -112,7 +116,7 @@ run (Contains r) = do
   putStrLn "[arx:main] Parse"
   paths      ← lines <$> getContents
   putStrLn "[arx:main] Get digests"
-  objs       ← mapM getObject paths
+  objs       ← mapM parseOrGetObject paths
   putStrLn "[arx:main] Request matches"
   matches    ← hasDigest objs
   putStrLn "[arx:main] Outputing"
