@@ -80,15 +80,13 @@ findArxConfig = do
       let root = (p </> arxDir)
       exists ← doesPathExist root
       if exists
-        then return $ Config p
+        then do
+          putStrLn $ "Found archive at '" <> p <> "'"
+          return $ Config p
         else
           if p == "/"
           then do putStrLn "Not in an Arx repository"; exitFailure
-          else
-            let next = takeDirectory p
-            in if next /= p then findRoot next else do
-              putStrLn "Reached / -- no Arx archive found"
-              exitFailure
+          else findRoot (takeDirectory p)
 
 getClient :: ClientConf → IO Client
 getClient Nothing = do
