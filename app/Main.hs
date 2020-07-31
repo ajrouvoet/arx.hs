@@ -84,11 +84,7 @@ findArxConfig = do
         else
           if p == "/"
           then do putStrLn "Not in an Arx repository"; exitFailure
-          else
-            let next = takeDirectory p
-            in if next /= p then findRoot next else do
-              putStrLn "Reached / -- no Arx archive found"
-              exitFailure
+          else findRoot (takeDirectory p)
 
 getClient :: ClientConf → IO Client
 getClient Nothing = do
