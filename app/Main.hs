@@ -3,7 +3,9 @@ module Main where
 import Control.Monad
 import Control.Monad.IO.Class
 
+import Data.Default
 import Data.Char (toLower)
+import Data.Yaml (decodeFileThrow)
 import Data.Hashable
 import Data.Map.Strict as Map
 import Data.ByteArray ()
@@ -45,16 +47,15 @@ myStyle = defStyle { stylePrefix = currentLabel }
 type ClientConf = Maybe RemoteConfig
 
 data Command
-  = Init Config
+  = Init FilePath
   | Cache
   | Contains { remote :: ClientConf }
   | Serve
   | Manifest { path :: FilePath }
 
-initOpts :: Parser Config
+initOpts :: Parser FilePath
 initOpts =
-  Config
-    <$> argument str (metavar "ARCHIVE" <> help "The archive root")
+  argument str (metavar "ARCHIVE" <> help "The archive root")
 
 containOpts :: Parser Command
 containOpts =
@@ -102,7 +103,9 @@ findArxConfig = do
       exists ← doesPathExist root
       if exists
         then do
-          return $ Config p
+          let configPath = root </> settingsFilename
+          settings <- decodeFileThrow configPath
+          return $ Config p settings
         else
           if p == "/"
           then do putStrLn "Not in an Arx repository"; exitFailure
@@ -120,7 +123,7 @@ getClient (Just c) = do
 run :: Command → IO ()
 
 run (Init c) = do
-  void $ arx c (Arx.init :: Arx ())
+  void $ arx (Config c def) (Arx.init :: Arx ())
 
 run Cache = do
   c ← findArxConfig

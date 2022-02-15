@@ -2,8 +2,10 @@
 module Arx.Monad where
 
 -- import Data.UnixTime
+import Data.Yaml (encode)
 import Data.Maybe
 import Data.Text (pack)
+import qualified Data.ByteString as BS
 import Data.Time
 import Data.Time.Clock.POSIX
 import Data.List.Split
@@ -21,6 +23,7 @@ import System.Posix.Time
 import System.Posix.Files as Posix
 import System.FilePath
 import System.FilePath.Find as Find
+import System.ProgressBar
 
 import Database.Persist.Sqlite
 
@@ -60,6 +63,7 @@ init = do
   path ← (\c → c^.dbPath) <$> config
   liftIO (createDirectoryIfMissing True $ takeDirectory path)
   runQuery $ runMigration migrateAll
+  overwriteSettings
   buildCache
 
 getObject :: (MonadIO m) ⇒ FilePath → m PlainObject
@@ -126,6 +130,12 @@ buildFreshCache snap files = forM_ files $ \ file → do
   logInfoNS "arx:cache" (pack $ "Fresh cache for " ++ file)
   buildFileCache snap file
 
+overwriteSettings :: (MonadArx m) => m ()
+overwriteSettings = do
+  c ← config
+  let p = c ^. getSettingsPath
+  liftIO $ BS.writeFile p (encode (_settings c))
+
 buildCache :: (MonadArx m) => m ()
 buildCache = do
   mLatest ← runQuery latestSnap
@@ -137,6 +147,9 @@ buildCache = do
   -- modification time < latest snapshot time. If this fails, we create it
   -- freshly. Cache misses are reported.
   files   ← allFiles
+
+  -- report some progress
+  pb      ← liftIO $ newProgressBar defStyle 10 (Progress 0 (length files) ())
 
   case mLatest of
     Nothing → buildFreshCache (entityKey snap) files
@@ -154,6 +167,8 @@ buildCache = do
           ) else (do
             copyFileCache (entityKey latest) (entityKey snap) file
           )
+
+        liftIO $ incProgress pb 1
 
 checkFile :: (MonadArx m) ⇒ FilePath → m [Entity Object]
 checkFile path = do
@@ -177,4 +192,4 @@ arx :: (MonadArx m) ⇒ Config → m a → IO a
 arx c m = do
   -- normalize the root
   r ← liftIO $ makeAbsolute (c^.root)
-  runStderrLoggingT $ runArx (Config r) m
+  runStderrLoggingT $ runArx c m

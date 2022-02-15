@@ -54,6 +54,7 @@ dependencies:
 - warp
 - blaze-builder
 - aeson
+- yaml
 - scotty
 - req
 - split
