@@ -57,6 +57,7 @@ dependencies:
 - scotty
 - req
 - split
+- terminal-progress-bar
 
 library:
   source-dirs: src

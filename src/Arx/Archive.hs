@@ -39,8 +39,8 @@ Object
 
 
 data PlainObject = Plain
-  { path   :: String
-  , digest :: String
+  { path    :: String
+  , digest  :: String
   } deriving (Generic)
 
 instance ToJSON PlainObject

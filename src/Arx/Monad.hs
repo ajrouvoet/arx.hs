@@ -37,9 +37,9 @@ class ( Monad m
       , MonadIO m
       , MonadLogger m) ⇒ MonadArx m where
 
-  runArx          :: Config → m a → LoggingT IO a
-  runQuery        :: DbAction m a → m a
-  config          :: m Config
+  runArx   :: Config → m a → LoggingT IO a
+  runQuery :: DbAction m a → m a
+  config   :: m Config
 
 type DbAction m a = ReaderT SqlBackend m a
 
@@ -82,14 +82,18 @@ parseOrGetObject line = do
 
 utcToEpochTime = fromIntegral . floor . utcTimeToPOSIXSeconds
 
-allFiles :: (MonadArx m) ⇒ m [FilePath]
-allFiles = do
-  path  ← _root <$> config
+regularFilesOf :: (MonadIO m) ⇒ FilePath -> m [FilePath]
+regularFilesOf root = do
   files ← liftIO $ find always
     (   fileType ==? RegularFile
     &&? filePath /~? "**/.arx/*")
-    path
-  return ((\p → normalise (path </> p)) <$> files)
+    root
+  return ((\p → normalise (root </> p)) <$> files)
+
+allFiles :: (MonadArx m) ⇒ m [FilePath]
+allFiles = do
+  path  ← _root <$> config
+  regularFilesOf path
 
 modifiedFiles :: (MonadArx m) ⇒ UTCTime → m [FilePath]
 modifiedFiles since = do
