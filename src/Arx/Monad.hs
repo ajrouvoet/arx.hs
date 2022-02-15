@@ -192,4 +192,4 @@ arx :: (MonadArx m) ⇒ Config → m a → IO a
 arx c m = do
   -- normalize the root
   r ← liftIO $ makeAbsolute (c^.root)
-  runStderrLoggingT $ runArx c m
+  runFileLoggingT (c ^. logPath) $ runArx c m

@@ -38,6 +38,9 @@ cache = "cache.sqlite"
 
 getArchivePath :: Getter Config FilePath
 getArchivePath = to (\c -> c^.root </> arxDir)
+  
+logPath :: Getter Config FilePath
+logPath = getArchivePath . to (\arch -> arch </> "debug")
 
 dbPath :: Getter Config FilePath
 dbPath = getArchivePath . to (\arch -> arch </> cache)
