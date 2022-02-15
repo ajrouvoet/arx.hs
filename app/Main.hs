@@ -135,7 +135,8 @@ run Serve = do
 
 run (Manifest p) = do
   -- first remove the old manifest to prevent reading it while writing it
-  removeFile manifestfile
+  exists <- doesPathExist manifestfile
+  if exists then removeFile manifestfile else return ()
 
   -- resources
   files <- Arx.regularFilesOf p
