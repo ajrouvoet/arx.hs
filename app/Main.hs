@@ -5,6 +5,7 @@ import Control.Monad.IO.Class
 import Control.Lens ((^.))
 
 import Data.Default
+import Data.List (isPrefixOf)
 import Data.Char (toLower)
 import Data.Yaml (decodeFileThrow)
 import Data.Hashable
@@ -28,14 +29,15 @@ import Control.Monad.Logger
 import Debug.Trace
 
 import Arx
+import Arx.Api
+import Arx.OnDisk
 import Arx.FileUtils
+import Arx.FileTree (RootNode(..),findTree)
 -- import Arx.Server
 -- import Arx.Client
 import qualified Arx as Arx
 
 manifestfile = "manifest.arx"
-
-arxDir = ".arx"
 
 currentLabel :: Label String
 currentLabel = Label {
@@ -50,6 +52,7 @@ myStyle = defStyle { stylePrefix = currentLabel }
 data Command
   = Create FilePath
   | AddFile FilePath
+  | Status
   | Manifest FilePath
   | CheckManifest FilePath
   -- = Init FilePath
@@ -77,7 +80,7 @@ createOpts =
 
 manifestOpts :: Parser Command
 manifestOpts =
-  Manifest <$> (option auto (metavar "PATH?" <> value "."))
+  Manifest <$> option auto (metavar "PATH?" <> value ".")
 
 checkOpts :: Parser FilePath
 checkOpts =
@@ -97,6 +100,9 @@ commands = subparser
   <> command "manifest"
      (info manifestOpts
            (fullDesc <> progDesc "Create a manifest for the PATH (defaults to '.')."))
+  <> command "status"
+     (info (pure Status <**> helper)
+           (fullDesc <> progDesc "Check the status of the archive."))
   )
   -- <> command "serve"
   --    (info (pure Serve)
@@ -111,23 +117,6 @@ commands = subparser
   --            <> "and check if they are contained in the archive.")))
   -- )
 
-findArxRoot :: IO FilePath
-findArxRoot = do
-  path ← getCurrentDirectory
-  findRoot path
-  where
-    findRoot :: FilePath → IO FilePath
-    findRoot p = do
-      let root = (p </> arxDir)
-      exists ← doesPathExist root
-      if exists
-        then do
-          return root
-        else
-          if p == "/"
-          then do putStrLn "Not in an Arxive"; exitFailure
-          else findRoot (takeDirectory p)
-
 -- getClient :: ClientConf → IO Client
 -- getClient Nothing = do
 --   c ← findArxConfig
@@ -140,16 +129,23 @@ findArxRoot = do
 run :: Command → IO ()
 
 run (Create root) = do
-  root <- makeAbsolute root
-  void $ create (Config (root </> arxDir) (Settings [root]))
+  r <- makeAbsolute root
+  void $ create (Config r (r </> arxDir) Settings)
 
 run (AddFile f) = do
-  f  <- makeAbsolute f
-  r  <- findArxRoot
-  result <- runArxOnDisk r (new f) -- TODO errrs
+  f      <- makeAbsolute f
+  result <- arx (new f) -- TODO errrs
   case result of
     (Left err) -> putStrLn (show err)
     (Right _ ) -> return ()
+
+run Status = do
+  cd <- getCurrentDirectory 
+  s <- arx $ do
+    sp <- store
+    t  <- liftIO $ findTree (const ()) cd (\p i -> not (sp `isPrefixOf` p))
+    status (RootNode (takeDirectory cd) t)
+  putStrLn $ show s
 
 -- run Cache = do
 --   c ← findArxConfig
@@ -159,7 +155,8 @@ run (AddFile f) = do
 --   c ← findArxConfig
 --   server c
 
-run (CheckManifest mf) = do
+-- run (CheckManifest mf) = do
+
 
 run (Manifest p) = do
   -- first remove the old manifest to prevent reading it while writing it
@@ -182,31 +179,6 @@ run (Manifest p) = do
   -- cleanup
   hFlush out
   hClose out
-
--- run (Contains r) = do
---   putStrLn "[arx:main] Client"
---   Client{..} ← getClient r
---   putStrLn "[arx:main] Parse"
---   paths      ← lines <$> getContents
---   putStrLn "[arx:main] Get digests"
---   objs       ← mapM parseOrGetObject paths
---   putStrLn "[arx:main] Request matches"
---   matches    ← hasDigest objs
---   putStrLn "[arx:main] Outputing"
---   void $ mapM printMatches matches
-
---   where
---     -- print the matches for a single queried path
---     printMatches (f, matches) = do
---       putStrLn ("? " ++ f)
---       if matches == []
---         then do
---           putStrLn "- No matches found"
---         else do
---           putStrLn "+ Found the following matches:"
---           forM_ matches $ \match → do
---             putStrLn ("\t> " ++ match)
---       putStrLn ""
 
 main :: IO ()
 main = do
