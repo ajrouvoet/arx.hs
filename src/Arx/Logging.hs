@@ -1,41 +1,83 @@
 module Arx.Logging where
 
--- import System.ProgressBar
+import Control.Lens
 
--- import Control.Monad.Reader
--- import Control.Monad.Writer
+import Data.Default
+import Data.Text.Lazy
+import System.ProgressBar
 
--- data Message = Info Text | Warning Text | Error Text
+import Control.Monad.Reader
+import Control.Monad.State
 
--- class Logger l where
+import Debug.Trace
 
---   log :: Message -> l ()
+data Message = Info Text | Warning Text | Error Text | Silent
+  deriving Show
 
---   -- Report what we're working on and how many.
---   workOn   :: Text -> Int -> l ()
---   -- finish some units of work and update the goal.
---   progress :: Text -> Int -> l ()
+data Task = Task
+  { _description :: Text
+  , _runTask     :: IO Message
+  }
 
+data RuntimeSt = Rt
+  { _tasks   :: [Task]
+  , _thelog  :: [Message]
+  }
 
--- type Log     = [Message]
--- type IOBar a = ReaderT (ProgressBar Text) (WriterT Log IO a)
+instance Default RuntimeSt where
+  def = Rt [] []
 
--- instance Logger IOBar where
+makeLenses ''Task
+makeLenses ''RuntimeSt
 
---   log = tell
+type Runtime =
+  ReaderT (ProgressBar Text) (
+  StateT RuntimeSt
+  IO)
 
---   workOn lbl work = do
---     pb <- ask
---     liftIO $ updateProgress
---       (\pr -> pr
---         { progressTodo   = progressTodo pr + work
---         , progressCustom = lbl
---         }) pb
+addTask :: Task -> Runtime ()
+addTask t = do
+  tasks %= (t:)
+  pb <- ask
+  liftIO $ updateProgress pb $ \case pr@Progress{..} -> pr { progressTodo = progressTodo + 1 }
 
---   progress lbl work = do
---     pb <- ask
---     liftIO $ updateProgress
---       (\pr -> pr
---         { progressDone   = progressDone pr + work
---         , progressCustom = lbl
---         }) pb
+writelog :: Message -> Runtime ()
+writelog m = thelog %= (m:)
+
+setGoal :: Text -> Runtime ()
+setGoal t = do
+  pb <- ask
+  liftIO $ updateProgress pb $ \case pr@Progress{..} -> pr { progressCustom = t }
+
+tick :: Runtime ()
+tick = ask >>= \ pb -> liftIO (incProgress pb 1)
+
+step :: Runtime Bool
+step = do
+  ts <- use tasks
+  case ts of
+    []   -> return False
+    t:ts' -> do
+      tasks .= ts'
+      setGoal (t ^. description)
+      m <- liftIO (t ^. runTask)
+      tick
+      writelog m
+      return True
+
+runAll :: Runtime ()
+runAll = do
+  b <- step
+  if b then runAll else return ()
+
+goalLabel :: Label Text
+goalLabel = Label
+  { runLabel = \pr _ -> progressCustom pr }
+  
+runtimePbStyle :: Style Text
+runtimePbStyle = defStyle { stylePrefix = goalLabel }
+
+execRuntime :: Runtime a -> IO a
+execRuntime c = do
+  pb <- newProgressBar runtimePbStyle 10.0 (Progress 0 0 "Waiting...")
+  evalStateT (runReaderT c pb) def

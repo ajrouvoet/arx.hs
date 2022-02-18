@@ -2,7 +2,7 @@ module Main where
 
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Lens ((^.))
+import Control.Lens ((^.), use)
 
 import Data.Default
 import Data.List (isPrefixOf)
@@ -26,16 +26,18 @@ import Database.Persist.Sqlite
 
 import Control.Monad.Logger
 
-import Debug.Trace
 
 import Arx
 import Arx.Api
 import Arx.OnDisk
-import Arx.FileUtils
+import Arx.FileUtils ( regularFilesOf )
 import Arx.FileTree (RootNode(..),findTree)
 -- import Arx.Server
 -- import Arx.Client
 import qualified Arx as Arx
+import Arx.Logging
+
+import Debug.Trace
 
 manifestfile = "manifest.arx"
 
@@ -51,7 +53,7 @@ myStyle = defStyle { stylePrefix = currentLabel }
 
 data Command
   = Create FilePath
-  | AddFile FilePath
+  | AddFile [FilePath]
   | Status
   | Manifest FilePath
   | CheckManifest FilePath
@@ -60,23 +62,13 @@ data Command
   -- | Contains { remote :: ClientConf }
   -- | Serve
 
-addOpts :: Parser FilePath
+addOpts :: Parser [FilePath]
 addOpts =
-  argument str (metavar "FILE" <> help "File to be added to the archive.")
+  some $ argument str (metavar "FILES" <> help "Files to be added to the archive.")
 
 createOpts :: Parser FilePath
 createOpts =
   argument str (metavar "ROOT" <> help "Create the archive, rooted in ROOT.")
-
--- containOpts :: Parser Command
--- containOpts =
---   Contains <$> (optional $ (\ad → Remote ad 8888) <$> (strOption
---                 (long "remote" <> short 'r'
---                 <> metavar "REMOTE"
---                 <> help "remote Arx server addr")))
-
--- fileOpt :: Parser String
--- fileOpt = argument str (metavar "PATH" <> help "File path")
 
 manifestOpts :: Parser Command
 manifestOpts =
@@ -104,27 +96,6 @@ commands = subparser
      (info (pure Status <**> helper)
            (fullDesc <> progDesc "Check the status of the archive."))
   )
-  -- <> command "serve"
-  --    (info (pure Serve)
-  --          (fullDesc <> progDesc "Start an archive server"))
-  -- <> command "cache"
-  --    (info (pure Cache)
-  --          (fullDesc <> progDesc "Update the archive cache"))
-  -- <> command "has"
-  --    (info containOpts
-  --          (fullDesc <> progDesc
-  --            (  "Read newline separated paths from stdin,"
-  --            <> "and check if they are contained in the archive.")))
-  -- )
-
--- getClient :: ClientConf → IO Client
--- getClient Nothing = do
---   c ← findArxConfig
---   putStrLn $ "Local archive at '" <> _root c <> "'"
---   return $ localClient c
--- getClient (Just c) = do
---   putStrLn $ "Remote archive at `" <> show c <> "'"
---   return $ remoteClient c
 
 run :: Command → IO ()
 
@@ -132,31 +103,27 @@ run (Create root) = do
   r <- makeAbsolute root
   void $ create (Config r (r </> arxDir) Settings)
 
-run (AddFile f) = do
-  f      <- makeAbsolute f
-  result <- arx (new f) -- TODO errrs
-  case result of
-    (Left err) -> putStrLn (show err)
-    (Right _ ) -> return ()
+run (AddFile fs) = do
+  execRuntime $ do
+    forM_ fs $ \f -> do
+      f' <- liftIO $ makeAbsolute f
+      addTask $ Task (pack f) $ arx (do -- TODO make more efficient by getting the common parts of arx out
+        m <- new f'
+        case m of
+          Left err -> return $ Error ((pack f) <> ": " <> (pack $ show err))
+          Right _  -> return Silent)
+    runAll
+    l <- use thelog
+    forM_ l $ \m -> do
+      liftIO $ putStrLn $ show m
 
 run Status = do
-  cd <- getCurrentDirectory 
+  cd <- getCurrentDirectory
   s <- arx $ do
     sp <- store
     t  <- liftIO $ findTree (const ()) cd (\p i -> not (sp `isPrefixOf` p))
     status (RootNode (takeDirectory cd) t)
   prettyStatus s
-
--- run Cache = do
---   c ← findArxConfig
---   arx c (Arx.buildCache :: Arx ())
-
--- run Serve = do
---   c ← findArxConfig
---   server c
-
--- run (CheckManifest mf) = do
-
 
 run (Manifest p) = do
   -- first remove the old manifest to prevent reading it while writing it
