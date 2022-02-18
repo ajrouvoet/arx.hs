@@ -26,8 +26,7 @@ import Debug.Trace
 arxDir = ".arx"
 
 data Config = Config
-  { _root      :: FilePath
-  , _storePath :: FilePath
+  { _storePath :: FilePath
   , _settings  :: Settings
   }
 
@@ -49,14 +48,6 @@ store = do
   c <- ask
   return (c ^. storePath)
 
-linkObject :: Object -> OnDisk  ()
-linkObject o = do
-  r <- view root
-  s <- store
-  let src = ".." </> makeRelative r (o ^. path) -- TODO correct?
-  let tgt = s </> (o ^. digest)
-  liftIO $ createSymbolicLink src tgt
-
 create :: Config -> IO Bool
 create conf = do
   let s = conf ^. storePath
@@ -72,7 +63,7 @@ runArxOnDisk :: FilePath -> OnDisk a -> IO a
 runArxOnDisk root m = do
   let arch = root </> arxDir
   s <- decodeFileThrow (withSettings arch)
-  let c = Config root arch s
+  let c = Config arch s
 
   runFileLoggingT (c ^. logPath) (runReaderT m c)
 
@@ -128,8 +119,8 @@ instance MonadArx OnDisk where
   hasContent d = do
     s <- store
     let addr = s </> d
-    hit <- liftIO $ fileExist addr
-    if hit
+    hit <- liftIO $ fileExist (traceShowId addr)
+    if (traceShowId hit)
       then do
         path <- liftIO $ readSymbolicLink addr
         path <- liftIO $ canonicalizePath (s </> path)
@@ -137,19 +128,9 @@ instance MonadArx OnDisk where
       else do
         return Nothing
 
-  newObject o = do
-    -- check if o is in the archive
-    r <- view root
-    let rooted = r `isPrefixOf` (o ^. path)
-
-    if not rooted
-      then return $ Left OutOfArchive
-      else do
-        -- check if it is new
-        res <- hasContent (o ^. digest)
-        case res of
-          Just o' -> return $ Left (NotNew o')
-          Nothing -> do
-            -- add the content
-            linkObject o
-            return $ Right o
+  _linkObject o = do
+    r <- root
+    s <- store
+    let src = ".." </> makeRelative r (o ^. path) -- TODO correct?
+    let tgt = s </> (o ^. digest)
+    liftIO $ createSymbolicLink src tgt

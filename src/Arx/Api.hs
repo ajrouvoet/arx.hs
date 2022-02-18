@@ -8,6 +8,7 @@ import Data.Aeson hiding (Object)
 import qualified Data.Aeson as Ae
 import Data.Yaml (encode, Parser)
 import Data.Maybe
+import Data.List (isPrefixOf)
 import Data.Text.Lazy (pack, Text)
 import Data.Default
 
@@ -79,14 +80,15 @@ class ( Monad m
       , MonadLogger m) ⇒ MonadArx m where
 
   -- Gets the settings
+  root        :: m FilePath
   askSettings :: m Settings
 
   -- Check if some content is contained in the archive.
   -- The object always contains an absolute path.
   hasContent  :: Digest   -> m (Maybe Object)
 
-  -- Add supposedly new content to the archive.
-  newObject   :: Object   -> m (Either NewErr Object)
+  -- Add assumed new content to the archive.
+  _linkObject :: Object   -> m ()
 
   -- Get a list of all objects stored
   -- All paths are absolute.
@@ -112,6 +114,25 @@ getObject :: (MonadIO m) ⇒ FilePath → m Object
 getObject path = do
   dig :: Hash.Digest Hash.SHA1 ← liftIO $ hashFile path
   return $ Obj path (show dig)
+
+
+newObject :: (MonadArx m) => Object -> m (Either NewErr Object)
+newObject o = do
+    -- check if o is in the archive
+    r <- root
+    let rooted = r `isPrefixOf` (o ^. path)
+
+    if not rooted
+      then return $ Left OutOfArchive
+      else do
+        -- check if it is new
+        res <- hasContent (o ^. digest)
+        case res of
+          Just o' -> return $ Left (NotNew o')
+          Nothing -> do
+            -- add the content
+            _linkObject o
+            return $ Right o
 
 new :: (MonadArx m) => FilePath -> m (Either NewErr Object)
 new p = do
