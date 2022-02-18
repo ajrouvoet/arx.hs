@@ -32,6 +32,10 @@ nodeName :: Node i -> FileName
 nodeName (DirNode  Dir{..})  = dir
 nodeName (FileNode File{..}) = fileName
 
+nodeDisplay :: Node i -> FileName
+nodeDisplay (DirNode  Dir{..})  = addTrailingPathSeparator dir
+nodeDisplay (FileNode File{..}) = fileName
+
 nodeStatus :: Node a -> a
 nodeStatus (DirNode  Dir{..})  = status
 nodeStatus (FileNode File{..}) = status

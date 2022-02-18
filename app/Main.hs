@@ -145,7 +145,7 @@ run Status = do
     sp <- store
     t  <- liftIO $ findTree (const ()) cd (\p i -> not (sp `isPrefixOf` p))
     status (RootNode (takeDirectory cd) t)
-  putStrLn $ show s
+  prettyStatus s
 
 -- run Cache = do
 --   c ← findArxConfig

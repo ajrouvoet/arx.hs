@@ -9,10 +9,6 @@ import qualified Data.Aeson as Ae
 import Data.Yaml (encode, Parser)
 import Data.Maybe
 import Data.Text (pack)
-import qualified Data.ByteString as BS
-import Data.Time
-import Data.Time.Clock.POSIX
-import Data.List.Split
 import Data.Default
 
 import Control.Lens hiding ((.:), (.=))
@@ -20,8 +16,6 @@ import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource
 import Control.Monad.Reader
-import Control.Monad.IO.Class
-import Control.Monad.IO.Unlift
 
 import System.Directory
 import System.Posix.Time
@@ -33,7 +27,7 @@ import System.ProgressBar
 import qualified Crypto.Hash as Hash
 import Crypto.Hash.Conduit (hashFile)
 
-import Arx.FileTree
+import Arx.FileTree as FT
 
 import Debug.Trace
 
@@ -134,7 +128,7 @@ news fs = do
   newObjects os
 
 data Mark = Marked | NotMarked | Mixed
-  deriving Show
+  deriving (Eq, Show)
 
 joinMark :: Mark -> Mark -> Mark
 joinMark NotMarked Marked  = Mixed
@@ -167,8 +161,23 @@ pruneMarks (DirNode  Dir{..}) =
 status :: (MonadArx m) => RootNode i -> m (Maybe (RootNode Mark))
 status rn = do
   let rn' = fmap (const NotMarked) rn 
-  st    <- traceShowId <$> fmap (^. path) <$> stored
+  st    <- fmap (^. path) <$> stored
 
   -- mark everything
   let rn@RootNode{..}  = markFiles st rn'
   return $ pruneMarks node <&> \n -> rn {node = n}
+
+
+prettyNode :: FilePath -> Node Mark -> IO ()
+prettyNode pf n | nodeStatus n == Marked    = return ()
+                | nodeStatus n == NotMarked = putStrLn $ "\t" <> pf </> nodeDisplay n
+                | nodeStatus n == Mixed     =
+  case n of
+    FileNode f -> putStrLn $ "\t" <> FT.fileName f -- ??
+    DirNode  d -> forM_ (FT.children d) (prettyNode (pf </> dir d))
+
+prettyStatus :: Maybe (RootNode Mark) -> IO ()
+prettyStatus Nothing  = putStrLn "Everything archived!"
+prettyStatus (Just RootNode{..}) = do
+  putStrLn "Unarchived files:"
+  prettyNode "" node
