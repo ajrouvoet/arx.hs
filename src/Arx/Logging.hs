@@ -1,9 +1,12 @@
 module Arx.Logging where
 
+import Prelude hiding (putStrLn)
+
 import Control.Lens
 
 import Data.Default
 import Data.Text.Lazy
+import Data.Text.Lazy.IO
 import System.ProgressBar
 
 import Control.Monad.Reader
@@ -13,6 +16,12 @@ import Debug.Trace
 
 data Message = Info Text | Warning Text | Error Text | Silent
   deriving Show
+
+printMessage :: Message -> IO ()
+printMessage (Info i)    = putStrLn $ ">\t" <> i
+printMessage (Warning w) = putStrLn $ "!\t" <> w
+printMessage (Error e)   = putStrLn $ "E\t" <> e
+printMessage Silent      = return ()
 
 data Task = Task
   { _description :: Text
@@ -68,12 +77,12 @@ step = do
 runAll :: Runtime ()
 runAll = do
   b <- step
-  if b then runAll else return ()
+  when b runAll
 
 goalLabel :: Label Text
 goalLabel = Label
   { runLabel = \pr _ -> progressCustom pr }
-  
+
 runtimePbStyle :: Style Text
 runtimePbStyle = defStyle { stylePrefix = goalLabel }
 

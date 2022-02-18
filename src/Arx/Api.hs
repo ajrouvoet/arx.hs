@@ -8,7 +8,7 @@ import Data.Aeson hiding (Object)
 import qualified Data.Aeson as Ae
 import Data.Yaml (encode, Parser)
 import Data.Maybe
-import Data.Text (pack)
+import Data.Text.Lazy (pack, Text)
 import Data.Default
 
 import Control.Lens hiding ((.:), (.=))
@@ -68,6 +68,10 @@ instance FromJSON Object
 data NewErr = NotNew Object
             | OutOfArchive
   deriving (Show)
+  
+prettyErr :: NewErr -> Text
+prettyErr (NotNew Obj{..}) = "Content already exists at " <> pack _path
+prettyErr OutOfArchive     = "Cannot add a location outside of the archive."
 
 class ( Monad m
       , MonadUnliftIO m

@@ -110,12 +110,12 @@ run (AddFile fs) = do
       addTask $ Task (pack f) $ arx (do -- TODO make more efficient by getting the common parts of arx out
         m <- new f'
         case m of
-          Left err -> return $ Error ((pack f) <> ": " <> (pack $ show err))
+          Left err -> return $ Error ((pack f) <> ": " <> (prettyErr err))
           Right _  -> return Silent)
     runAll
     l <- use thelog
     forM_ l $ \m -> do
-      liftIO $ putStrLn $ show m
+      liftIO $ printMessage m
 
 run Status = do
   cd <- getCurrentDirectory
