@@ -101,7 +101,7 @@ run :: Command → IO ()
 
 run (Create root) = do
   r <- makeAbsolute root
-  void $ create (Config (r </> arxDir) Settings)
+  void $ create (Config r (r </> arxDir) Settings)
 
 run (AddFile fs) = do
   execRuntime $ do

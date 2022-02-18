@@ -26,7 +26,8 @@ import Debug.Trace
 arxDir = ".arx"
 
 data Config = Config
-  { _storePath :: FilePath
+  { _theRoot   :: FilePath
+  , _storePath :: FilePath
   , _settings  :: Settings
   }
 
@@ -63,7 +64,7 @@ runArxOnDisk :: FilePath -> OnDisk a -> IO a
 runArxOnDisk root m = do
   let arch = root </> arxDir
   s <- decodeFileThrow (withSettings arch)
-  let c = Config arch s
+  let c = Config root arch s
 
   runFileLoggingT (c ^. logPath) (runReaderT m c)
 
@@ -111,6 +112,9 @@ instance MonadArx OnDisk where
         else return []
 
     return $ concat os
+
+  root = do
+    view theRoot
 
   askSettings = do
     c <- ask
