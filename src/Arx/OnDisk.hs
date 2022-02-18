@@ -13,7 +13,7 @@ import Control.Monad.Logger
 import System.Posix.Files as Posix
 import System.Posix.Types
 import System.FilePath
-import System.Directory (createDirectory, doesFileExist, listDirectory, doesPathExist, getCurrentDirectory, canonicalizePath)
+import System.Directory (createDirectory, doesFileExist, listDirectory, doesPathExist, getCurrentDirectory, canonicalizePath, createDirectoryIfMissing)
 
 import Arx.Api
 
@@ -64,7 +64,7 @@ create conf = do
   if exist
     then return False
     else do
-      createDirectory s
+      createDirectoryIfMissing False s
       encodeFile (conf ^. getSettingsPath) (conf ^. settings)
       return True
 
